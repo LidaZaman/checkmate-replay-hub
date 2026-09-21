@@ -1,0 +1,52 @@
+cat << 'EOF' > frontend/index.html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkmate Replay Hub</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding-top: 60px;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            display: inline-block;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 450px;
+        }
+        h1 {
+            color: #1a202c;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #4a5568;
+            font-size: 16px;
+        }
+        .badge {
+            display: inline-block;
+            background: #e2e8f0;
+            color: #2d3748;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Checkmate Replay Hub</h1>
+        <p>Willkommen zur Plattform für automatisierte Schach-Auswertungen.</p>
+        <div class="badge">Meilenstein 1: Bereitgestellt</div>
+    </div>
+</body>
+</html>
+EOF

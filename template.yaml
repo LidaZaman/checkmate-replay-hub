@@ -1,0 +1,38 @@
+cat << 'EOF' > template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Checkmate Replay Hub - Meilenstein 1 Frontend Hosting'
+
+Resources:
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+
+Outputs:
+  WebsiteURL:
+    Description: 'URL des Frontends'
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  BucketName:
+    Description: 'S3 Bucket Name'
+    Value: !Ref FrontendBucket
+EOF
