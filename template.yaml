@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Checkmate Replay Hub - Meilenstein 1 Frontend Hosting'
+Description: 'Checkmate Replay Hub - Milestone 1 & 2 Infrastructure'
 
 Resources:
+  # باکت میزبانی وب‌سایت فرانت‌اند (از مایل‌استون ۱)
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -27,10 +28,29 @@ Resources:
             Action: 's3:GetObject'
             Resource: !Sub 'arn:aws:s3:::${FrontendBucket}/*'
 
+  # باکت امن جدید برای ذخیره فایل‌های آپلود شده بازی‌ها (مایل‌استون ۲)
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
+
 Outputs:
   WebsiteURL:
     Description: 'URL des Frontends'
     Value: !GetAtt FrontendBucket.WebsiteURL
   BucketName:
-    Description: 'S3 Bucket Name'
+    Description: 'S3 Frontend Bucket Name'
     Value: !Ref FrontendBucket
+  UploadBucketName:
+    Description: 'S3 Upload Bucket Name'
+    Value: !Ref UploadBucket

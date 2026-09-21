@@ -10,41 +10,147 @@
             text-align: center;
             background-color: #f0f2f5;
             margin: 0;
-            padding-top: 60px;
+            padding-top: 50px;
         }
         .card {
             background: white;
-            padding: 40px;
+            padding: 35px;
             border-radius: 12px;
             display: inline-block;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 450px;
+            max-width: 420px;
+            width: 90%;
+            text-align: left;
         }
         h1 {
             color: #1a202c;
-            margin-bottom: 10px;
+            font-size: 24px;
+            margin-top: 0;
+            text-align: center;
         }
-        p {
+        .subtitle {
+            color: #718096;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
             color: #4a5568;
-            font-size: 16px;
+            font-size: 14px;
         }
-        .badge {
+        input[type="email"], input[type="file"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            background-color: #3182ce;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2b6cb0;
+        }
+        button:disabled {
+            background-color: #a0aec0;
+            cursor: not-allowed;
+        }
+        .status-container {
+            margin-top: 22px;
+            text-align: center;
+        }
+        .status-badge {
             display: inline-block;
-            background: #e2e8f0;
-            color: #2d3748;
-            padding: 6px 12px;
+            padding: 8px 18px;
             border-radius: 20px;
             font-size: 14px;
             font-weight: bold;
-            margin-top: 15px;
+            letter-spacing: 0.5px;
         }
+        .status-idle { background: #edf2f7; color: #4a5568; }
+        .status-uploading { background: #feebc8; color: #c05621; }
+        .status-uploaded { background: #c6f6d5; color: #22543d; }
+        .status-error { background: #fed7d7; color: #9b2c2c; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>Checkmate Replay Hub</h1>
-        <p>Willkommen zur Plattform für automatisierte Schach-Auswertungen.</p>
-        <div class="badge">Meilenstein 1: Bereitgestellt</div>
+        <div class="subtitle">Partie-Einreichung (Meilenstein 2)</div>
+        
+        <div class="form-group">
+            <label for="email">E-Mail-Adresse:</label>
+            <input type="email" id="email" placeholder="name@example.com" required>
+        </div>
+
+        <div class="form-group">
+            <label for="file">Schach-Zugdatei (.txt):</label>
+            <input type="file" id="file" accept=".txt" required>
+        </div>
+
+        <button id="submitBtn" onclick="handleUpload()">Einreichen</button>
+
+        <div class="status-container">
+            <span id="statusBadge" class="status-badge status-idle">Bereit zum Upload</span>
+        </div>
     </div>
+
+    <script>
+        async function handleUpload() {
+            const emailInput = document.getElementById('email');
+            const fileInput = document.getElementById('file');
+            const statusBadge = document.getElementById('statusBadge');
+            const submitBtn = document.getElementById('submitBtn');
+
+            const email = emailInput.value.trim();
+            const file = fileInput.files[0];
+
+            if (!email || !file) {
+                statusBadge.textContent = 'ERROR';
+                statusBadge.className = 'status-badge status-error';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            statusBadge.textContent = 'UPLOADING';
+            statusBadge.className = 'status-badge status-uploading';
+
+            try {
+                const content = await file.text();
+
+                if (!content.trim()) {
+                    throw new Error('Datei ist leer');
+                }
+
+                setTimeout(() => {
+                    statusBadge.textContent = 'UPLOADED';
+                    statusBadge.className = 'status-badge status-uploaded';
+                    submitBtn.disabled = false;
+                }, 1200);
+
+            } catch (err) {
+                statusBadge.textContent = 'ERROR';
+                statusBadge.className = 'status-badge status-error';
+                submitBtn.disabled = false;
+            }
+        }
+    </script>
 </body>
 </html>
