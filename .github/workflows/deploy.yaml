@@ -1,0 +1,46 @@
+name: Deploy Frontend to S3
+
+on:
+  push:
+    branches:
+      - main  # یا master بسته به نام شاخه اصلی شما
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # ۱. دریافت کدهای ریپازیتوری
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ۲. اتصال امن به اکانت سندباکس AWS با استفاده از اطلاعات موقت
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} # برای محیط سندباکس حتما لازم است
+          aws-region: us-east-1
+
+      # ۳. ساخت یا به‌روزرسانی زیرساخت ابری با CloudFormation
+      - name: Deploy CloudFormation Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file template.yaml \
+            --stack-name checkmate-stack \
+            --capabilities CAPABILITY_IAM
+
+      # ۴. استخراج نام باکت ساخته‌شده
+      - name: Get S3 Bucket Name
+        id: get-bucket
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name checkmate-stack \
+            --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" \
+            --output text)
+          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+
+      # ۵. همگام‌سازی و آپلود خودکار فایل‌های پوشه frontend به باکت
+      - name: Sync Frontend to S3
+        run: |
+          aws s3 sync ./frontend s3://${{ env.BUCKET_NAME }} --delete
