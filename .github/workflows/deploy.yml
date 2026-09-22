@@ -1,4 +1,4 @@
-name: Deploy Frontend to S3
+name: Deploy Checkmate Replay Hub
 
 on:
   push:
@@ -19,14 +19,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Deploy CloudFormation Stack
+      - name: Package and Deploy CloudFormation
         run: |
+          aws cloudformation package \
+            --template-file template.yaml \
+            --s3-bucket ${{ secrets.AWS_ACCESS_KEY_ID }}-artifacts-bucket 2>/dev/null || \
           aws cloudformation deploy \
             --template-file template.yaml \
             --stack-name checkmate-stack \
-            --capabilities CAPABILITY_IAM
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --resolve-s3
 
-      - name: Get S3 Bucket Info and Website URL
+      - name: Get Outputs
         run: |
           BUCKET_NAME=$(aws cloudformation describe-stacks \
             --stack-name checkmate-stack \
@@ -36,9 +40,14 @@ jobs:
             --stack-name checkmate-stack \
             --query "Stacks[0].Outputs[?OutputKey=='WebsiteURL'].OutputValue" \
             --output text)
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name checkmate-stack \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+            --output text)
           echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
           echo "=========================================="
           echo "Website URL: $WEB_URL"
+          echo "API URL:     $API_URL"
           echo "=========================================="
 
       - name: Sync Frontend to S3

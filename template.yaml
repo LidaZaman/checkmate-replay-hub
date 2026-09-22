@@ -1,5 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 Description: 'Checkmate Replay Hub - Infrastructure (Milestones 1, 2 & 3)'
+
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: python3.12
+    MemorySize: 128
 
 Resources:
   # باکت میزبانی وب‌سایت فرانت‌اند (مایل‌استون ۱)
@@ -57,6 +64,88 @@ Resources:
         - AttributeName: id
           KeyType: HASH
 
+  # نقش امنیتی برای توابع لامبدا جهت دسترسی به DynamoDB و SES
+  BackendFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoAndSESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt SubmissionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+
+  # تابع ثبت درخواست و ارسال ایمیل تایید
+  SubmitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: app.submit_handler
+      Role: !GetAtt BackendFunctionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SubmissionsTable
+          API_ENDPOINT: !Sub 'https://${CheckmateApi}.execute-api.${AWS::Region}.amazonaws.com'
+          SENDER_EMAIL: 'verified-sender@example.com'
+      Events:
+        SubmitApi:
+          Type: HttpApi
+          Properties:
+            Path: /submit
+            Method: post
+            ApiId: !Ref CheckmateApi
+
+  # تابع تایید لینک و بردن وضعیت به PROCESSING
+  ConfirmFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: app.confirm_handler
+      Role: !GetAtt BackendFunctionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SubmissionsTable
+      Events:
+        ConfirmApi:
+          Type: HttpApi
+          Properties:
+            Path: /confirm
+            Method: get
+            ApiId: !Ref CheckmateApi
+
+  # سرویس API Gateway (HTTP API با قابلیت CORS)
+  CheckmateApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - '*'
+
 Outputs:
   WebsiteURL:
     Description: 'URL des Frontends'
@@ -70,3 +159,6 @@ Outputs:
   TableName:
     Description: 'DynamoDB Table Name'
     Value: !Ref SubmissionsTable
+  ApiEndpoint:
+    Description: 'API Gateway Endpoint URL'
+    Value: !Sub 'https://${CheckmateApi}.execute-api.${AWS::Region}.amazonaws.com'
