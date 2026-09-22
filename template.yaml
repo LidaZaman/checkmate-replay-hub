@@ -7,9 +7,19 @@ Globals:
     Timeout: 10
     Runtime: python3.12
     MemorySize: 128
+  HttpApi:
+    CorsConfiguration:
+      AllowOrigins:
+        - '*'
+      AllowMethods:
+        - GET
+        - POST
+        - OPTIONS
+      AllowHeaders:
+        - '*'
 
 Resources:
-  # باکت میزبانی وب‌سایت فرانت‌اند (مایل‌استون ۱)
+  # باکت میزبانی فرانت‌اند (مایل‌استون ۱)
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -51,7 +61,7 @@ Resources:
               - '*'
             MaxAge: 3000
 
-  # جدول ثبت وضعیت‌ها و توکن‌های تایید (مایل‌استون ۳)
+  # جدول ذخیره وضعیت‌ها و توکن‌ها (مایل‌استون ۳)
   SubmissionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -64,7 +74,7 @@ Resources:
         - AttributeName: id
           KeyType: HASH
 
-  # نقش امنیتی برای توابع لامبدا جهت دسترسی به DynamoDB و SES
+  # نقش IAM با دسترسی‌های لازم
   BackendFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -94,7 +104,7 @@ Resources:
                   - ses:SendRawEmail
                 Resource: '*'
 
-  # تابع ثبت درخواست و ارسال ایمیل تایید
+  # تابع ارسال اطلاعات و ساخت لینک تایید
   SubmitFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -104,7 +114,6 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref SubmissionsTable
-          API_ENDPOINT: !Sub 'https://${CheckmateApi}.execute-api.${AWS::Region}.amazonaws.com'
           SENDER_EMAIL: 'verified-sender@example.com'
       Events:
         SubmitApi:
@@ -112,9 +121,8 @@ Resources:
           Properties:
             Path: /submit
             Method: post
-            ApiId: !Ref CheckmateApi
 
-  # تابع تایید لینک و بردن وضعیت به PROCESSING
+  # تابع تایید یک‌بار مصرف لینک و تغییر وضعیت به PROCESSING
   ConfirmFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -130,21 +138,6 @@ Resources:
           Properties:
             Path: /confirm
             Method: get
-            ApiId: !Ref CheckmateApi
-
-  # سرویس API Gateway (HTTP API با قابلیت CORS)
-  CheckmateApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      CorsConfiguration:
-        AllowOrigins:
-          - '*'
-        AllowMethods:
-          - GET
-          - POST
-          - OPTIONS
-        AllowHeaders:
-          - '*'
 
 Outputs:
   WebsiteURL:
@@ -160,5 +153,5 @@ Outputs:
     Description: 'DynamoDB Table Name'
     Value: !Ref SubmissionsTable
   ApiEndpoint:
-    Description: 'API Gateway Endpoint URL'
-    Value: !Sub 'https://${CheckmateApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Description: 'HTTP API Gateway URL'
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com'

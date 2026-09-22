@@ -8,12 +8,10 @@ ses = boto3.client('ses')
 
 TABLE_NAME = os.environ.get('TABLE_NAME')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'test@example.com')
-API_ENDPOINT = os.environ.get('API_ENDPOINT', '')
 
 table = dynamodb.Table(TABLE_NAME) if TABLE_NAME else None
 
 def submit_handler(event, context):
-    """ثبت اولیه بازی و ارسال ایمیل تایید"""
     try:
         body = json.loads(event.get('body', '{}'))
         email = body.get('email')
@@ -23,7 +21,7 @@ def submit_handler(event, context):
             return {
                 'statusCode': 400,
                 'headers': {'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'Email und Züge erforderlich'})
+                'body': json.dumps({'error': 'Email und Zuege erforderlich'})
             }
 
         submission_id = str(uuid.uuid4())
@@ -39,7 +37,11 @@ def submit_handler(event, context):
             }
         )
 
-        confirm_url = f"{API_ENDPOINT}/confirm?id={submission_id}&token={token}"
+        # استخراج خودکار نشانی دامنه API از ریکوئست ورودی
+        domain = event.get('requestContext', {}).get('domainName', '')
+        stage = event.get('requestContext', {}).get('stage', '')
+        base_url = f"https://{domain}" if not stage or stage == '$default' else f"https://{domain}/{stage}"
+        confirm_url = f"{base_url}/confirm?id={submission_id}&token={token}"
 
         ses.send_email(
             Source=SENDER_EMAIL,
@@ -70,7 +72,6 @@ def submit_handler(event, context):
         }
 
 def confirm_handler(event, context):
-    """مدیریت کلیک روی لینک تایید و ارتقای وضعیت به PROCESSING"""
     params = event.get('queryStringParameters') or {}
     submission_id = params.get('id')
     token = params.get('token')
@@ -93,7 +94,6 @@ def confirm_handler(event, context):
                 'body': '<h2>Einreichung nicht gefunden</h2>'
             }
 
-        # در صورت تکراری بودن کلیک
         if item.get('status') == 'PROCESSING':
             return {
                 'statusCode': 200,
@@ -101,7 +101,6 @@ def confirm_handler(event, context):
                 'body': '<h2>Bereits bestaetigt</h2><p>Status ist bereits PROCESSING.</p>'
             }
 
-        # بررسی اعتبار توکن یک‌بار مصرف
         if item.get('confirmation_token') != token:
             return {
                 'statusCode': 403,
@@ -109,7 +108,6 @@ def confirm_handler(event, context):
                 'body': '<h2>Ungueltiger Token</h2><p>Link abgelaufen oder unguetlig.</p>'
             }
 
-        # ثبت وضعیت PROCESSING و حذف توکن تایید
         table.update_item(
             Key={'id': submission_id},
             UpdateExpression="SET #st = :p REMOVE confirmation_token",
