@@ -19,16 +19,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Package and Deploy CloudFormation
+      - name: SAM Build and Deploy
         run: |
-          aws cloudformation package \
-            --template-file template.yaml \
-            --s3-bucket ${{ secrets.AWS_ACCESS_KEY_ID }}-artifacts-bucket 2>/dev/null || \
-          aws cloudformation deploy \
-            --template-file template.yaml \
+          sam build --template-file template.yaml
+          sam deploy \
             --stack-name checkmate-stack \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
-            --resolve-s3
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
 
       - name: Get Outputs
         run: |
