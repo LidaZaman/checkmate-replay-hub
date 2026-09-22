@@ -7,8 +7,7 @@ dynamodb = boto3.resource('dynamodb')
 ses = boto3.client('ses')
 
 TABLE_NAME = os.environ.get('TABLE_NAME')
-SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'test@example.com')
-
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '2030.lida@gmail.com')
 table = dynamodb.Table(TABLE_NAME) if TABLE_NAME else None
 
 def submit_handler(event, context):

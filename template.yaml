@@ -104,7 +104,7 @@ Resources:
                   - ses:SendRawEmail
                 Resource: '*'
 
-  # تابع ارسال اطلاعات و ساخت لینک تایید
+  # تابع ثبت درخواست و ارسال ایمیل تایید
   SubmitFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -114,7 +114,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref SubmissionsTable
-          SENDER_EMAIL: 'verified-sender@example.com'
+          SENDER_EMAIL: '2030.lida@gmail.com'
       Events:
         SubmitApi:
           Type: HttpApi
