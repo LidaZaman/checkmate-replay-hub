@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Checkmate Replay Hub - Milestone 1 & 2 Infrastructure'
+Description: 'Checkmate Replay Hub - Infrastructure (Milestones 1, 2 & 3)'
 
 Resources:
-  # باکت میزبانی وب‌سایت فرانت‌اند (از مایل‌استون ۱)
+  # باکت میزبانی وب‌سایت فرانت‌اند (مایل‌استون ۱)
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -28,7 +28,7 @@ Resources:
             Action: 's3:GetObject'
             Resource: !Sub 'arn:aws:s3:::${FrontendBucket}/*'
 
-  # باکت امن جدید برای ذخیره فایل‌های آپلود شده بازی‌ها (مایل‌استون ۲)
+  # باکت ذخیره فایل‌های آپلود شده (مایل‌استون ۲)
   UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -44,6 +44,19 @@ Resources:
               - '*'
             MaxAge: 3000
 
+  # جدول ثبت وضعیت‌ها و توکن‌های تایید (مایل‌استون ۳)
+  SubmissionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: checkmate-submissions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
 Outputs:
   WebsiteURL:
     Description: 'URL des Frontends'
@@ -54,3 +67,6 @@ Outputs:
   UploadBucketName:
     Description: 'S3 Upload Bucket Name'
     Value: !Ref UploadBucket
+  TableName:
+    Description: 'DynamoDB Table Name'
+    Value: !Ref SubmissionsTable
