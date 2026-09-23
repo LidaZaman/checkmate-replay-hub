@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'Checkmate Replay Hub - Infrastructure (Milestones 1, 2 & 3)'
+Description: 'Checkmate Replay Hub - Infrastructure (Milestones 1 to 5)'
 
 Globals:
   Function:
-    Timeout: 10
+    Timeout: 15
     Runtime: python3.12
     MemorySize: 128
   HttpApi:
@@ -19,7 +19,6 @@ Globals:
         - '*'
 
 Resources:
-  # باکت میزبانی فرانت‌اند (مایل‌استون ۱)
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -45,10 +44,14 @@ Resources:
             Action: 's3:GetObject'
             Resource: !Sub 'arn:aws:s3:::${FrontendBucket}/*'
 
-  # باکت ذخیره فایل‌های آپلود شده (مایل‌استون ۲)
   UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -61,7 +64,19 @@ Resources:
               - '*'
             MaxAge: 3000
 
-  # جدول ذخیره وضعیت‌ها و توکن‌ها (مایل‌استون ۳)
+  UploadBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadImages
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${UploadBucket}/*'
+
   SubmissionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -74,7 +89,6 @@ Resources:
         - AttributeName: id
           KeyType: HASH
 
-  # نقش IAM با دسترسی‌های لازم
   BackendFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -88,7 +102,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DynamoAndSESAccess
+        - PolicyName: BackendPermissions
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -103,8 +117,12 @@ Resources:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${UploadBucket}/*'
 
-  # تابع ثبت درخواست و ارسال ایمیل تایید
   SubmitFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -122,7 +140,6 @@ Resources:
             Path: /submit
             Method: post
 
-  # تابع تایید یک‌بار مصرف لینک و تغییر وضعیت به PROCESSING
   ConfirmFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -132,11 +149,29 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref SubmissionsTable
+          SENDER_EMAIL: '2030.lida@gmail.com'
+          UPLOAD_BUCKET: !Ref UploadBucket
       Events:
         ConfirmApi:
           Type: HttpApi
           Properties:
             Path: /confirm
+            Method: get
+
+  StatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: app.status_handler
+      Role: !GetAtt BackendFunctionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SubmissionsTable
+      Events:
+        StatusApi:
+          Type: HttpApi
+          Properties:
+            Path: /status
             Method: get
 
 Outputs:

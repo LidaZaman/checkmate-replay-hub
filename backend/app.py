@@ -6,9 +6,11 @@ from chess_engine import ChessValidator
 
 dynamodb = boto3.resource('dynamodb')
 ses = boto3.client('ses')
+s3 = boto3.client('s3')
 
 TABLE_NAME = os.environ.get('TABLE_NAME')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '2030.lida@gmail.com')
+UPLOAD_BUCKET = os.environ.get('UPLOAD_BUCKET')
 
 table = dynamodb.Table(TABLE_NAME) if TABLE_NAME else None
 
@@ -94,7 +96,6 @@ def confirm_handler(event, context):
                 'body': '<h2>Einreichung nicht gefunden</h2>'
             }
 
-        # اگر قبلاً تایید و پردازش شده باشد
         if item.get('status') in ['PROCESSING', 'DONE', 'FAILED']:
             return {
                 'statusCode': 200,
@@ -109,7 +110,6 @@ def confirm_handler(event, context):
                 'body': '<h2>Ungueltiger Token</h2><p>Link abgelaufen oder unguetlig.</p>'
             }
 
-        # تغییر وضعیت اولیه به PROCESSING
         table.update_item(
             Key={'id': submission_id},
             UpdateExpression="SET #st = :p REMOVE confirmation_token",
@@ -117,50 +117,71 @@ def confirm_handler(event, context):
             ExpressionAttributeValues={':p': 'PROCESSING'}
         )
 
-        # ارزیابی حرکات شطرنج توسط موتور گام اول
         validator = ChessValidator()
         moves_data = item.get('moves', '')
         email = item.get('email')
 
         is_valid, message, count, winner = validator.validate_and_play(moves_data)
+        board_image_url = None
 
         if is_valid:
             final_status = 'DONE'
-            email_subject = 'Checkmate Replay Hub - Auswertung: Gueltig (DONE)'
-            email_body = (
-                f"Ihre Partie wurde erfolgreich ausgewertet!\n\n"
-                f"Status: DONE\n"
-                f"Gewinner:in: {winner}\n"
-                f"Gespielte Zuege: {count}\n"
+            svg_content = validator.generate_board_svg()
+            image_key = f"boards/{submission_id}.svg"
+            s3.put_object(
+                Bucket=UPLOAD_BUCKET,
+                Key=image_key,
+                Body=svg_content.encode('utf-8'),
+                ContentType='image/svg+xml'
             )
+            board_image_url = f"https://{UPLOAD_BUCKET}.s3.amazonaws.com/{image_key}"
+
+            email_subject = 'Checkmate Replay Hub - Auswertung: Gueltig (DONE)'
+            email_html = f"""
+            <h2>Ihre Partie wurde erfolgreich ausgewertet!</h2>
+            <p><strong>Status:</strong> DONE</p>
+            <p><strong>Gewinner:in:</strong> {winner}</p>
+            <p><strong>Gespielte Zuege:</strong> {count}</p>
+            <h3>Endposition des Schachbretts:</h3>
+            <p><a href="{board_image_url}" target="_blank">Klicken Sie hier, um das Schachbrettbild separat anzuzeigen</a></p>
+            <div>{svg_content}</div>
+            """
+            email_text = f"Status: DONE\nGewinner:in: {winner}\nZuege: {count}\nBild: {board_image_url}"
         else:
             final_status = 'FAILED'
             email_subject = 'Checkmate Replay Hub - Auswertung: Fehlgeschlagen (FAILED)'
-            email_body = (
-                f"Ihre Partie konnte nicht validiert werden.\n\n"
-                f"Status: FAILED\n"
-                f"Fehlergrund: {message}\n"
-                f"Ausgefuehrte Zuege bis zum Fehler: {count}\n"
-            )
+            email_html = f"""
+            <h2>Ihre Partie konnte nicht validiert werden.</h2>
+            <p><strong>Status:</strong> FAILED</p>
+            <p><strong>Fehlergrund:</strong> {message}</p>
+            <p><strong>Ausgefuehrte Zuege bis zum Fehler:</strong> {count}</p>
+            """
+            email_text = f"Status: FAILED\nGrund: {message}\nZuege: {count}"
 
-        # ثبت وضعیت نهایی (DONE یا FAILED) در DynamoDB
         table.update_item(
             Key={'id': submission_id},
             UpdateExpression="SET #st = :s, #res = :r",
             ExpressionAttributeNames={'#st': 'status', '#res': 'result_details'},
             ExpressionAttributeValues={
                 ':s': final_status,
-                ':r': {'message': message, 'move_count': count, 'winner': str(winner)}
+                ':r': {
+                    'message': message,
+                    'move_count': count,
+                    'winner': str(winner),
+                    'board_image_url': board_image_url
+                }
             }
         )
 
-        # ارسال ایمیل دوم حاوی نتیجه به کاربر
         ses.send_email(
             Source=SENDER_EMAIL,
             Destination={'ToAddresses': [email]},
             Message={
                 'Subject': {'Data': email_subject},
-                'Body': {'Text': {'Data': email_body}}
+                'Body': {
+                    'Text': {'Data': email_text},
+                    'Html': {'Data': email_html}
+                }
             }
         )
 
