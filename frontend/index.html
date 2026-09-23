@@ -87,6 +87,7 @@
         .status-idle { background: #edf2f7; color: #4a5568; }
         .status-uploading { background: #feebc8; color: #c05621; }
         .status-awaiting { background: #bee3f8; color: #2b6cb0; }
+        .status-processing { background: #c6f6d5; color: #22543d; }
         .status-error { background: #fed7d7; color: #9b2c2c; }
         .status-info {
             font-size: 12px;
@@ -120,7 +121,8 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'https://0gpyiltuea.execute-api.us-east-1.amazonaws.com';
+        const API_BASE_URL = 'https://rerenomz77.execute-api.us-east-1.amazonaws.com';
+        let pollingInterval = null;
 
         async function handleUpload() {
             const emailInput = document.getElementById('email');
@@ -139,7 +141,6 @@
                 return;
             }
 
-            // ۱. تغییر وضعیت به UPLOADING
             submitBtn.disabled = true;
             statusBadge.textContent = 'UPLOADING';
             statusBadge.className = 'status-badge status-uploading';
@@ -147,10 +148,7 @@
 
             try {
                 const moves = await file.text();
-
-                if (!moves.trim()) {
-                    throw new Error('Datei ist leer');
-                }
+                if (!moves.trim()) throw new Error('Datei ist leer');
 
                 const response = await fetch(`${API_BASE_URL}/submit`, {
                     method: 'POST',
@@ -158,14 +156,32 @@
                     body: JSON.stringify({ email: email, moves: moves })
                 });
 
-                if (!response.ok) {
-                    throw new Error('Fehler beim Server-Upload');
-                }
+                if (!response.ok) throw new Error('Fehler beim Server-Upload');
+                
+                const data = await response.json();
+                const submissionId = data.submissionId;
 
-                // ۲. تغییر وضعیت به AWAITING_CONFIRMATION
                 statusBadge.textContent = 'AWAITING_CONFIRMATION';
                 statusBadge.className = 'status-badge status-awaiting';
-                infoText.textContent = 'Bestätigungslink wurde per E-Mail versendet. Bitte Posteingang prüfen!';
+                infoText.textContent = 'Bestätigungslink wurde gesendet. Warten auf Klick...';
+
+                if (pollingInterval) clearInterval(pollingInterval);
+                pollingInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch(`${API_BASE_URL}/status?id=${submissionId}`);
+                        if (res.ok) {
+                            const resData = await res.json();
+                            if (resData.status === 'PROCESSING') {
+                                clearInterval(pollingInterval);
+                                statusBadge.textContent = 'PROCESSING';
+                                statusBadge.className = 'status-badge status-processing';
+                                infoText.textContent = 'Erfolgreich bestätigt! Status: PROCESSING';
+                            }
+                        }
+                    } catch (e) {
+                        // در صورت خطا برای تلاش مجدد رد می‌شود
+                    }
+                }, 3000);
 
             } catch (err) {
                 statusBadge.textContent = 'ERROR';
