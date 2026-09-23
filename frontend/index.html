@@ -87,20 +87,23 @@
         .status-idle { background: #edf2f7; color: #4a5568; }
         .status-uploading { background: #feebc8; color: #c05621; }
         .status-awaiting { background: #bee3f8; color: #2b6cb0; }
-        .status-processing { background: #c6f6d5; color: #22543d; }
+        .status-processing { background: #e2e8f0; color: #4a5568; }
+        .status-done { background: #c6f6d5; color: #22543d; }
+        .status-failed { background: #fed7d7; color: #9b2c2c; }
         .status-error { background: #fed7d7; color: #9b2c2c; }
         .status-info {
-            font-size: 12px;
-            color: #718096;
+            font-size: 13px;
+            color: #4a5568;
             margin-top: 10px;
             display: block;
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>Checkmate Replay Hub</h1>
-        <div class="subtitle">Meilenstein 3: E-Mail-Bestätigung</div>
+        <div class="subtitle">Meilenstein 4: Auswertung & Ergebnis</div>
         
         <div class="form-group">
             <label for="email">E-Mail-Adresse:</label>
@@ -163,7 +166,7 @@
 
                 statusBadge.textContent = 'AWAITING_CONFIRMATION';
                 statusBadge.className = 'status-badge status-awaiting';
-                infoText.textContent = 'Bestätigungslink wurde gesendet. Warten auf Klick...';
+                infoText.textContent = 'Bestätigungslink wurde gesendet. Bitte E-Mail bestätigen!';
 
                 if (pollingInterval) clearInterval(pollingInterval);
                 pollingInterval = setInterval(async () => {
@@ -171,15 +174,26 @@
                         const res = await fetch(`${API_BASE_URL}/status?id=${submissionId}`);
                         if (res.ok) {
                             const resData = await res.json();
-                            if (resData.status === 'PROCESSING') {
-                                clearInterval(pollingInterval);
+                            const currentStatus = resData.status;
+
+                            if (currentStatus === 'PROCESSING') {
                                 statusBadge.textContent = 'PROCESSING';
                                 statusBadge.className = 'status-badge status-processing';
-                                infoText.textContent = 'Erfolgreich bestätigt! Status: PROCESSING';
+                                infoText.textContent = 'Partie wird ausgewertet...';
+                            } else if (currentStatus === 'DONE') {
+                                clearInterval(pollingInterval);
+                                statusBadge.textContent = 'DONE';
+                                statusBadge.className = 'status-badge status-done';
+                                infoText.textContent = `Auswertung erfolgreich! Gewinner:in: ${resData.result_details?.winner || '-'}, Züge: ${resData.result_details?.move_count || 0}. Ergebnis-E-Mail wurde gesendet.`;
+                            } else if (currentStatus === 'FAILED') {
+                                clearInterval(pollingInterval);
+                                statusBadge.textContent = 'FAILED';
+                                statusBadge.className = 'status-badge status-failed';
+                                infoText.textContent = `Partie fehlerhaft: ${resData.result_details?.message || ''}. Fehler-E-Mail wurde gesendet.`;
                             }
                         }
                     } catch (e) {
-                        // در صورت خطا برای تلاش مجدد رد می‌شود
+                        // تلاش مجدد در صورت خطای شبکه
                     }
                 }, 3000);
 

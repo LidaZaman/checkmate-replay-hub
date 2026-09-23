@@ -2,12 +2,14 @@ import json
 import os
 import uuid
 import boto3
+from chess_engine import ChessValidator
 
 dynamodb = boto3.resource('dynamodb')
 ses = boto3.client('ses')
 
 TABLE_NAME = os.environ.get('TABLE_NAME')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '2030.lida@gmail.com')
+
 table = dynamodb.Table(TABLE_NAME) if TABLE_NAME else None
 
 def submit_handler(event, context):
@@ -36,7 +38,6 @@ def submit_handler(event, context):
             }
         )
 
-        # استخراج خودکار نشانی دامنه API از ریکوئست ورودی
         domain = event.get('requestContext', {}).get('domainName', '')
         stage = event.get('requestContext', {}).get('stage', '')
         base_url = f"https://{domain}" if not stage or stage == '$default' else f"https://{domain}/{stage}"
@@ -93,11 +94,12 @@ def confirm_handler(event, context):
                 'body': '<h2>Einreichung nicht gefunden</h2>'
             }
 
-        if item.get('status') == 'PROCESSING':
+        # اگر قبلاً تایید و پردازش شده باشد
+        if item.get('status') in ['PROCESSING', 'DONE', 'FAILED']:
             return {
                 'statusCode': 200,
                 'headers': {'Content-Type': 'text/html; charset=utf-8'},
-                'body': '<h2>Bereits bestaetigt</h2><p>Status ist bereits PROCESSING.</p>'
+                'body': f"<h2>Bereits bestaetigt</h2><p>Aktueller Status: {item.get('status')}</p>"
             }
 
         if item.get('confirmation_token') != token:
@@ -107,6 +109,7 @@ def confirm_handler(event, context):
                 'body': '<h2>Ungueltiger Token</h2><p>Link abgelaufen oder unguetlig.</p>'
             }
 
+        # تغییر وضعیت اولیه به PROCESSING
         table.update_item(
             Key={'id': submission_id},
             UpdateExpression="SET #st = :p REMOVE confirmation_token",
@@ -114,14 +117,98 @@ def confirm_handler(event, context):
             ExpressionAttributeValues={':p': 'PROCESSING'}
         )
 
+        # ارزیابی حرکات شطرنج توسط موتور گام اول
+        validator = ChessValidator()
+        moves_data = item.get('moves', '')
+        email = item.get('email')
+
+        is_valid, message, count, winner = validator.validate_and_play(moves_data)
+
+        if is_valid:
+            final_status = 'DONE'
+            email_subject = 'Checkmate Replay Hub - Auswertung: Gueltig (DONE)'
+            email_body = (
+                f"Ihre Partie wurde erfolgreich ausgewertet!\n\n"
+                f"Status: DONE\n"
+                f"Gewinner:in: {winner}\n"
+                f"Gespielte Zuege: {count}\n"
+            )
+        else:
+            final_status = 'FAILED'
+            email_subject = 'Checkmate Replay Hub - Auswertung: Fehlgeschlagen (FAILED)'
+            email_body = (
+                f"Ihre Partie konnte nicht validiert werden.\n\n"
+                f"Status: FAILED\n"
+                f"Fehlergrund: {message}\n"
+                f"Ausgefuehrte Zuege bis zum Fehler: {count}\n"
+            )
+
+        # ثبت وضعیت نهایی (DONE یا FAILED) در DynamoDB
+        table.update_item(
+            Key={'id': submission_id},
+            UpdateExpression="SET #st = :s, #res = :r",
+            ExpressionAttributeNames={'#st': 'status', '#res': 'result_details'},
+            ExpressionAttributeValues={
+                ':s': final_status,
+                ':r': {'message': message, 'move_count': count, 'winner': str(winner)}
+            }
+        )
+
+        # ارسال ایمیل دوم حاوی نتیجه به کاربر
+        ses.send_email(
+            Source=SENDER_EMAIL,
+            Destination={'ToAddresses': [email]},
+            Message={
+                'Subject': {'Data': email_subject},
+                'Body': {'Text': {'Data': email_body}}
+            }
+        )
+
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'text/html; charset=utf-8'},
-            'body': '<h2>Erfolgreich bestaetigt!</h2><p>Status: PROCESSING</p>'
+            'body': f"<h2>Erfolgreich ausgewertet!</h2><p>Status: {final_status}</p><p>{message}</p>"
         }
+
     except Exception as e:
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'text/html; charset=utf-8'},
-            'body': f'<h2>Fehler</h2><p>{str(e)}</p>'
+            'body': f'<h2>Fehler bei der Auswertung</h2><p>{str(e)}</p>'
+        }
+
+def status_handler(event, context):
+    params = event.get('queryStringParameters') or {}
+    submission_id = params.get('id')
+
+    if not submission_id:
+        return {
+            'statusCode': 400,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'id erforderlich'})
+        }
+
+    try:
+        response = table.get_item(Key={'id': submission_id})
+        item = response.get('Item')
+        if not item:
+            return {
+                'statusCode': 404,
+                'headers': {'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Nicht gefunden'})
+            }
+
+        return {
+            'statusCode': 200,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({
+                'status': item.get('status'),
+                'result_details': item.get('result_details')
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': str(e)})
         }
