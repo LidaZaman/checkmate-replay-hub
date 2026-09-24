@@ -10,7 +10,8 @@
             text-align: center;
             background-color: #f0f2f5;
             margin: 0;
-            padding-top: 50px;
+            padding-top: 40px;
+            padding-bottom: 50px;
         }
         .card {
             background: white;
@@ -18,21 +19,22 @@
             border-radius: 12px;
             display: inline-block;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 440px;
+            max-width: 480px;
             width: 90%;
             text-align: left;
         }
         h1 {
-            color: #1a202c;
+            color: #1a2c1e;
             font-size: 24px;
             margin-top: 0;
             text-align: center;
         }
         .subtitle {
-            color: #718096;
+            color: #1762d2;
             font-size: 14px;
             text-align: center;
             margin-bottom: 24px;
+            font-weight: 600;
         }
         .form-group {
             margin-bottom: 18px;
@@ -98,12 +100,23 @@
             display: block;
             line-height: 1.5;
         }
+        .board-container {
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        .board-container img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border: 1px solid #cbd5e0;
+        }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>Checkmate Replay Hub</h1>
-        <div class="subtitle">Meilenstein 4: Auswertung & Ergebnis</div>
+        <div class="subtitle">Meilenstein 5: Finale Schachbrett-Visualisierung</div>
         
         <div class="form-group">
             <label for="email">E-Mail-Adresse:</label>
@@ -121,10 +134,17 @@
             <span id="statusBadge" class="status-badge status-idle">Bereit zum Upload</span>
             <span id="infoText" class="status-info"></span>
         </div>
+
+        <div id="boardContainer" class="board-container">
+            <h3 style="font-size: 15px; color: #2d3748; margin-bottom: 10px;">Finales Schachbrett:</h3>
+            <img id="boardImage" src="" alt="Finales Schachbrett">
+        </div>
     </div>
 
     <script>
+        // توجه: آدرس جدید ApiEndpoint را از تب Actions در گیت‌هاب بردارید و اینجا قرار دهید (بدون اسلش پایانی)
         const API_BASE_URL = 'https://rerenomz77.execute-api.us-east-1.amazonaws.com';
+        
         let pollingInterval = null;
 
         async function handleUpload() {
@@ -133,9 +153,13 @@
             const statusBadge = document.getElementById('statusBadge');
             const infoText = document.getElementById('infoText');
             const submitBtn = document.getElementById('submitBtn');
+            const boardContainer = document.getElementById('boardContainer');
+            const boardImage = document.getElementById('boardImage');
 
             const email = emailInput.value.trim();
             const file = fileInput.files[0];
+
+            boardContainer.style.display = 'none';
 
             if (!email || !file) {
                 statusBadge.textContent = 'ERROR';
@@ -159,7 +183,10 @@
                     body: JSON.stringify({ email: email, moves: moves })
                 });
 
-                if (!response.ok) throw new Error('Fehler beim Server-Upload');
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.message || 'Fehler beim Server-Upload');
+                }
                 
                 const data = await response.json();
                 const submissionId = data.submissionId;
@@ -184,16 +211,23 @@
                                 clearInterval(pollingInterval);
                                 statusBadge.textContent = 'DONE';
                                 statusBadge.className = 'status-badge status-done';
-                                infoText.textContent = `Auswertung erfolgreich! Gewinner:in: ${resData.result_details?.winner || '-'}, Züge: ${resData.result_details?.move_count || 0}. Ergebnis-E-Mail wurde gesendet.`;
+                                infoText.textContent = `Auswertung erfolgreich! Gewinner:in: ${resData.result_details?.winner || '-'}, Züge: ${resData.result_details?.move_count || 0}.`;
+                                
+                                if (resData.result_details?.image_url) {
+                                    boardImage.src = resData.result_details.image_url;
+                                    boardContainer.style.display = 'block';
+                                }
+                                submitBtn.disabled = false;
                             } else if (currentStatus === 'FAILED') {
                                 clearInterval(pollingInterval);
                                 statusBadge.textContent = 'FAILED';
                                 statusBadge.className = 'status-badge status-failed';
-                                infoText.textContent = `Partie fehlerhaft: ${resData.result_details?.message || ''}. Fehler-E-Mail wurde gesendet.`;
+                                infoText.textContent = `Partie fehlerhaft: ${resData.result_details?.message || ''}.`;
+                                submitBtn.disabled = false;
                             }
                         }
                     } catch (e) {
-                        // تلاش مجدد در صورت خطای شبکه
+                        // در صورت خطای موقت شبکه، در دوره بعدی مجدداً استعلام می‌شود
                     }
                 }, 3000);
 
