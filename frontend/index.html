@@ -142,8 +142,7 @@
     </div>
 
     <script>
-        // توجه: آدرس جدید ApiEndpoint را از تب Actions در گیت‌هاب بردارید و اینجا قرار دهید (بدون اسلش پایانی)
-        const API_BASE_URL = 'https://rerenomz77.execute-api.us-east-1.amazonaws.com';
+        const API_BASE_URL = 'https://cs2frk4m47.execute-api.us-east-1.amazonaws.com';
         
         let pollingInterval = null;
 
@@ -227,7 +226,7 @@
                             }
                         }
                     } catch (e) {
-                        // در صورت خطای موقت شبکه، در دوره بعدی مجدداً استعلام می‌شود
+                        // در صورت بروز خطای موقت شبکه، در درخواست بعدی امتحان می‌شود
                     }
                 }, 3000);
 
